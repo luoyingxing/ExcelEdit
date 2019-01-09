@@ -5,6 +5,7 @@ package com.lyx.excel;
  * date: 2019/1/8.
  */
 public class Info {
+    public String row;
     public String provider;
     public String card;
     public String number;

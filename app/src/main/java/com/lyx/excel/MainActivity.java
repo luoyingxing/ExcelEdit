@@ -192,6 +192,11 @@ public class MainActivity extends AppCompatActivity {
                         if (info.length == 3) {
                             String[] pStr = info[0].split("[\\d]+");
                             if (pStr.length > 1) {
+                                Matcher matcher = Pattern.compile("[\\d]+").matcher(info[0]);
+                                if (matcher.find()) {
+                                    inf.row = matcher.group();
+                                }
+
                                 inf.provider = pStr[1].substring(1);
                             } else {
                                 inf.provider = info[0];
@@ -276,6 +281,7 @@ public class MainActivity extends AppCompatActivity {
                     Info info = list.get(i);
                     Log.d("ExcelActivity", "" + info.toString());
 
+                    mWritableSheet.addCell(new Label(2, i, info.row + "、"));
                     mWritableSheet.addCell(new Label(3, i, info.provider));
                     mWritableSheet.addCell(new Label(4, i, info.card));
                     mWritableSheet.addCell(new Label(5, i, info.number));
