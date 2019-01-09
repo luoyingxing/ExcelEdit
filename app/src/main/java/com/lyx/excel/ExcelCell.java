@@ -1,5 +1,7 @@
 package com.lyx.excel;
 
+import java.util.List;
+
 /**
  * ExcelCell
  * <p>
@@ -7,4 +9,14 @@ package com.lyx.excel;
  * Created by luoyingxing on 2019/1/9.
  */
 public class ExcelCell {
+    public List<Info> list;
+    public String tableName;
+
+    public ExcelCell() {
+    }
+
+    public ExcelCell(List<Info> list, String tableName) {
+        this.list = list;
+        this.tableName = tableName;
+    }
 }
