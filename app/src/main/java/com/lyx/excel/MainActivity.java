@@ -2,13 +2,18 @@ package com.lyx.excel;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.content.DialogInterface;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
 import android.support.annotation.NonNull;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
+import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.lyx.excel.permission.Permission;
@@ -26,18 +31,42 @@ import java.util.regex.Pattern;
 import jxl.Cell;
 import jxl.Sheet;
 import jxl.Workbook;
+import jxl.read.biff.BiffException;
 import jxl.write.Label;
 import jxl.write.WritableSheet;
 import jxl.write.WritableWorkbook;
 import jxl.write.WriteException;
 
 public class MainActivity extends AppCompatActivity {
+    private TextView noticeTV;
+    private TextView tipTV;
+    private Button convertBtn;
+
     private String regex = "[\u4e00-\u9fa5]{1}[A-Z]{1}[A-Z_0-9]{5}";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        noticeTV = findViewById(R.id.tv_notice);
+        tipTV = findViewById(R.id.tv_tip);
+        convertBtn = findViewById(R.id.btn_convert);
+
+        convertBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                tipTV.setText(null);
+                scheduleTask();
+            }
+        });
+
+        noticeTV.append("要求：\n1、必须将文档另保存为.xls格式，不能是.xlsx格式；" +
+                "\n2、文档名称必须为：excel.xls；" +
+                "\n3、需要在手机存储根目录新建一个文件夹，命名为abc；" +
+                "\n4、将excel.xls文档复制到刚才创建的abc目录下面；" +
+                "\n5、以上操作无误后即可进行转换操作。");
+
     }
 
     @SuppressLint("HandlerLeak")
@@ -45,8 +74,23 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void handleMessage(Message msg) {
             super.handleMessage(msg);
-            String message = (String) msg.obj;
 
+            String message = (String) msg.obj;
+            tipTV.append(message);
+
+            if (msg.what == 101) {
+                new AlertDialog.Builder(MainActivity.this)
+                        .setTitle("提示：转换完成")
+                        .setMessage("文档转换成功！")
+                        .setPositiveButton("确定", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                dialog.dismiss();
+                            }
+                        })
+                        .create()
+                        .show();
+            }
         }
     };
 
@@ -58,14 +102,10 @@ public class MainActivity extends AppCompatActivity {
         permissionManager.onPermissionsResult(requestCode, permissions, grantResults);
     }
 
-    @Override
-    protected void onResume() {
-        super.onResume();
-        scheduleTask();
-    }
-
     private void scheduleTask() {
+        tipTV.append("请求转换，检查读写权限\n");
         if (PermissionManager.checkPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+            tipTV.append("已有读写权限，即将开始转换任务\n");
             new Thread(new Runnable() {
                 @Override
                 public void run() {
@@ -83,6 +123,7 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void onApplyResult(boolean succeed) {
                     if (succeed) {
+                        tipTV.append("已有读写权限，即将开始转换任务\n");
                         new Thread(new Runnable() {
                             @Override
                             public void run() {
@@ -90,6 +131,7 @@ public class MainActivity extends AppCompatActivity {
                             }
                         }).start();
                     } else {
+                        tipTV.append("没有读写权限，转换失败！\n");
                         Toast.makeText(MainActivity.this, "没有读写文件权限无法操作！", Toast.LENGTH_SHORT).show();
                     }
                 }
@@ -101,22 +143,36 @@ public class MainActivity extends AppCompatActivity {
     private String readFileName = "excel.xls";
 
     private void convert() {
+        sendMessage("开始检查转换文件...\n");
+
         List<ExcelCell> excelList = new ArrayList<>();
 
         try {
             String path = Environment.getExternalStorageDirectory().getAbsolutePath();
             File file = new File(path + "/" + readFileDir + "/" + readFileName);
 
+            if (!file.exists()) {
+                sendMessage(readFileDir + "目录下的" + readFileName + "文件不存在\n");
+                return;
+            }
+
             Workbook book = Workbook.getWorkbook(file);
 
             Sheet[] sheets = book.getSheets();
             if (sheets.length == 0) {
+                sendMessage("文件没有工作表可操作\n");
                 return;
             }
+
+            Message m = Message.obtain();
+            m.obj = "读取文件中...\n";
+            handler.sendMessage(m);
 
             for (Sheet sheet : sheets) {
                 ExcelCell excelCell = new ExcelCell();
                 excelCell.tableName = sheet.getName();
+
+                sendMessage("正在读取工作表：" + excelCell.tableName + "...\n");
 
                 List<Info> list = new ArrayList<>();
 
@@ -125,13 +181,13 @@ public class MainActivity extends AppCompatActivity {
                 for (int i = 1; i < row; i++) {  //i = 1   从2行开始读取
                     Cell cell = sheet.getCell(2, i); //（列，行）2--> 读取第三列（即C列）
                     String data = cell.getContents();
-                    String[] content = data.split("装：");
+                    String[] content = data.split("装");
 
                     Info inf = new Info();
                     if (content.length > 1) {
 //                    Log.d("MainActivity", "content: " + content[0]);
 
-                        String[] info = content[0].split("，|,| ", 3);  //分为3个数组
+                        String[] info = content[0].split("，|,|。", 3);  //分为3个数组
 
                         if (info.length == 3) {
                             String[] pStr = info[0].split("[\\d]+");
@@ -146,10 +202,10 @@ public class MainActivity extends AppCompatActivity {
 
                             //找出车牌和个人信息
                             String str = info[2];
-                            Matcher m = Pattern.compile(regex).matcher(str);
+                            Matcher matcher = Pattern.compile(regex).matcher(str);
 
-                            if (m.find()) {
-                                String number = m.group();
+                            if (matcher.find()) {
+                                String number = matcher.group();
                                 inf.number = number;
 
                                 String information = null;
@@ -170,7 +226,6 @@ public class MainActivity extends AppCompatActivity {
 
                                 inf.information = information.trim();
                             }
-
                         }
                     }
 
@@ -180,26 +235,30 @@ public class MainActivity extends AppCompatActivity {
 
                 excelCell.list = list;
                 excelList.add(excelCell);
+
+                sendMessage("读取完工作表：" + excelCell.tableName + "\n");
             }
+
+            sendMessage("所有工作表已读取完，准备转换写入新文件...\n");
+
             book.close();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
 
-        Log.w("ExcelActivity", "============== 读取完毕 ===============");
+            Log.w("ExcelActivity", "============== 读取完毕 ===============");
 
-        WritableSheet mWritableSheet;
-        WritableWorkbook mWritableWorkbook;
+            WritableSheet mWritableSheet;
+            WritableWorkbook mWritableWorkbook;
 
-        String path = Environment.getExternalStorageDirectory().getAbsolutePath();
+            String path1 = Environment.getExternalStorageDirectory().getAbsolutePath();
 
-        try {
+//        try {
             for (int j = 0; j < excelList.size(); j++) {
                 ExcelCell excelCell = excelList.get(j);
                 List<Info> list = excelCell.list;
 
+                sendMessage("正在创建工作表：" + excelCell.tableName + "的副文件...\n");
+
                 // 输出Excel的路径
-                String filePath = path + "/" + readFileDir + "/excel_" + excelCell.tableName + ".xls";
+                String filePath = path1 + "/" + readFileDir + "/excel_" + excelCell.tableName + ".xls";
                 // 新建一个文件
                 OutputStream os = new FileOutputStream(filePath);
                 // 创建Excel工作簿
@@ -210,6 +269,8 @@ public class MainActivity extends AppCompatActivity {
                 if (null == mWritableSheet) {
                     return;
                 }
+
+                sendMessage("已创建工作表：excel_" + excelCell.tableName + ".xls，开始写入...\n");
 
                 for (int i = 0; i < list.size(); i++) {
                     Info info = list.get(i);
@@ -222,16 +283,34 @@ public class MainActivity extends AppCompatActivity {
 
                 }
 
+                sendMessage("工作表：excel_" + excelCell.tableName + ".xls写入成功！\n");
+
                 // 写入数据
                 mWritableWorkbook.write();
                 // 关闭文件
                 mWritableWorkbook.close();
             }
-        } catch (WriteException | IOException e) {
+
+            sendMessage("所有工作表写入成功！\n");
+
+            sendMessage("\n ================ 转换完成 ================\n", 101);
+
+        } catch (WriteException | IOException | BiffException e) {
             e.printStackTrace();
+            sendMessage(e.getMessage() + "\n" + e.toString() + "\n转换失败\n");
         }
 
         Log.w("ExcelActivity", "==============写入完毕 ===============");
     }
 
+    private void sendMessage(String string) {
+        sendMessage(string, 0);
+    }
+
+    private void sendMessage(String string, int what) {
+        Message msg = Message.obtain();
+        msg.obj = string;
+        msg.what = what;
+        handler.sendMessage(msg);
+    }
 }
