@@ -10,6 +10,22 @@ android {
         versionName "1.0"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
     }
+
+    signingConfigs {
+        debug {
+            v1SigningEnabled true
+            v2SigningEnabled true
+        }
+        release {
+            v1SigningEnabled true
+            v2SigningEnabled true
+            storeFile file("excel.jks")
+            storePassword "920930"
+            keyAlias "luoyingxing"
+            keyPassword "920930"
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
